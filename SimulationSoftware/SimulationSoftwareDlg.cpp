@@ -223,8 +223,8 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 
 			while (TRUE)
 			{
-				char recvBuffer[256];
-				recvSocker_.Receive(recvBuffer,sizeof(recvBuffer));
+				//char recvBuffer[256];
+				//recvSocker_.Receive(recvBuffer,sizeof(recvBuffer)); //可行
 
 				char szText[256];
 				int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
@@ -261,7 +261,8 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 				memset(sendBuffer, 0, sizeof(sendBuffer));
 				memcpy(sendBuffer, &deviceInfo, sizeof(DeviceInfo));
 				int len_send=send(s,sendBuffer,sizeof(sendBuffer),0);*/  //有问题
-				//应该先检验一下收到的包是否正确，然后再send
+				
+				//应该先检验一下收到的包是否正确，然后再send;没有做校验
 				int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
 				if (len_send==SOCKET_ERROR)
 				{
@@ -271,11 +272,17 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 				int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
 
 				int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
-				
+
+				int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
+
+				int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
+
 				if (len_send3 == SOCKET_ERROR)
 				{
 					OutputDebugString(L"发送失败....");  //MFC 用trace
 				}
+
+				
 		   }
 		}
 	}
@@ -344,7 +351,7 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	cisTable.signatures[1] = 'P';
 	cisTable.status = (unsigned short)0x0000;
 	cisTable.count = 0;
-	cisTable.length = (unsigned int)0xB400;
+	cisTable.length = (unsigned int)0xB4000;
 	for (int side = 0; side < CIS_COUNT; side++) {
 		for (int color = 0; color < COLOR_COUNT; color++) {
 			for (int x = 0; x < CIS_IMAGE_WIDTH; x++) {
@@ -354,5 +361,18 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 			}
 		}
 	}
+	//升级固件，下位机返回
+	updateCmd.signatures[0] = 'R';
+	updateCmd.signatures[1] = 'P';
+	updateCmd.status = (unsigned short)0x0000;
+	updateCmd.count = 0;
+	updateCmd.length = 4;
+	updateCmd.numOfBlock = 4;
 
+	//升级数据包，下位机返回
+	upgradeDate.signatures[0] = 'R';
+	upgradeDate.signatures[1] = 'P';
+	upgradeDate.status = (unsigned short)0x0000;
+	upgradeDate.count = 0; //请求计数
+	upgradeDate.length = (unsigned int)0x0000;  
 }

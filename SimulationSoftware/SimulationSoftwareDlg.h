@@ -47,5 +47,7 @@ private:
 	Response_ cmd;
 	PacketHeader returnTime;
 	CISTable cisTable;
+	updateHeader updateCmd;
+	PacketHeader upgradeDate;
 };
 
