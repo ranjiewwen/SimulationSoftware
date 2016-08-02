@@ -7,6 +7,7 @@
 #include "SimulationSoftwareDlg.h"
 #include "afxdialogex.h"
 //#include "TCP_Server.h"
+#include <iostream>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -53,6 +54,7 @@ CSimulationSoftwareDlg::CSimulationSoftwareDlg(CWnd* pParent /*=NULL*/)
 	, m_checkState(false)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+    InitCommandParameter();
 }
 
 void CSimulationSoftwareDlg::DoDataExchange(CDataExchange* pDX)
@@ -165,7 +167,7 @@ void CSimulationSoftwareDlg::OnBnClickedOk()
 	CDialogEx::OnOK();
 }
 
-
+#include <stdio.h>
 void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 {
 	// TODO:  在此添加控件通知处理程序代码
@@ -207,33 +209,74 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 
 		if (serverSocket_->Listen(1234))
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
+		SOCKET s = serverSocket_->Accept(100);
+		recvSocker_.Attach(s);
+		recvSocker_.SetRecvBufferSize(1024);
 
-		if (serverSocket_->Accept(100)==INVALID_SOCKET)
+		if (s==INVALID_SOCKET)
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机连接到生产管理软件失败...");
 		}
 		else
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机已连接到生产管理软件...");
-		}
-		serverSocket_->SetRecvBufferSize(1024);
-	    //客户端主动关闭连接
-		while (TRUE)
-		{	
-			int nRecv = serverSocket_->Receive(szText,strlen(szText));
-			if (nRecv==0)
+
+			while (TRUE)
 			{
-				GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件断开与服务端的连接...");
-				m_checkState = false;
-				m_stateBtn.SetWindowText(L"点钞机关闭");
-				break;
-			}
-			if ((nRecv == SOCKET_ERROR) && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
-			{
-				printf("recv fail...");
-				serverSocket_->Close();
-				//break;
-			}
+				char recvBuffer[256];
+				recvSocker_.Receive(recvBuffer,sizeof(recvBuffer));
+
+				char szText[256];
+				int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
+				if (nRecv == SOCKET_ERROR)
+				{
+					TRACE("接收错误...");
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收错误退出...");
+					break;
+				}
+				if (nRecv > 0)						// （2）可读
+				{
+					szText[nRecv] = '\0';
+					TRACE("接收到数据：%s \n", szText);
+
+					//char Sendbuff[100] = { 0 };
+					//sprintf(Sendbuff, "this zhangsan");
+					//::send(s, Sendbuff, strlen(Sendbuff + 1), 0);
+
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+				//	break;
+				}
+				if (nRecv==0)				      // （3）连接关闭、重启或者中断
+				{
+					::closesocket(s);
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件主动断开与服务端的连接...");
+					//m_checkState = false;
+					m_stateBtn.SetWindowText(L"关闭再次开机");
+					TRACE("链接关闭....");
+					//return true;
+					break;
+				}
+				
+			/*	char* sendBuffer = new char[sizeof(DeviceInfo)];
+				memset(sendBuffer, 0, sizeof(sendBuffer));
+				memcpy(sendBuffer, &deviceInfo, sizeof(DeviceInfo));
+				int len_send=send(s,sendBuffer,sizeof(sendBuffer),0);*/  //有问题
+				//应该先检验一下收到的包是否正确，然后再send
+				int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
+				if (len_send==SOCKET_ERROR)
+				{
+					OutputDebugString(L"发送失败....");  //MFC 用trace
+				}
+				
+				int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
+
+				int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
+				
+				if (len_send3 == SOCKET_ERROR)
+				{
+					OutputDebugString(L"发送失败....");  //MFC 用trace
+				}
+		   }
 		}
 	}
 	else
@@ -242,4 +285,74 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");
 		serverSocket_->Close();
 	}
+}
+
+
+void CSimulationSoftwareDlg::InitCommandParameter()
+{
+	
+	hd.signatures[0] = 'R';
+	hd.signatures[1] = 'P';
+	hd.status = (unsigned short)0x0000;
+	hd.count = 0; //请求计数
+	hd.length = (unsigned int)0xC8;  //??
+
+	//发送DeviceInfo信息
+	memset(&deviceInfo, 0, sizeof(deviceInfo));
+
+	//CString deviceInfo_sn;
+	//GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	//deviceInfo_sn.ReleaseBuffer(); 
+	//strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));
+
+	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	GetPrivateProfileString(L"DeviceInfo", L"model", L"", (LPWSTR)deviceInfo.model, sizeof(deviceInfo.model), GetExPath() + L"DEVICEINFO.ini");
+	GetPrivateProfileString(L"DeviceInfo", L"firmwareVersion", L"", (LPWSTR)deviceInfo.firmwareVersion, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+
+	deviceInfo.numberOfCIS = GetPrivateProfileInt(L"DeviceInfo", L"numberOfCIS", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.numberOfIR = GetPrivateProfileInt(L"DeviceInfo", L"numberOfIR", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.numberOfMH = GetPrivateProfileInt(L"DeviceInfo", L"numberOfMH", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.reserved = GetPrivateProfileInt(L"DeviceInfo", L"reserved", 0, GetExPath() + L"DEVICEINFO.ini");
+
+	deviceInfo.cisColorFlags = GetPrivateProfileInt(L"DeviceInfo", L"cisColorFlags", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.cisImageWidth = GetPrivateProfileInt(L"DeviceInfo", L"cisImageWidth", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.cisImageHeight = GetPrivateProfileInt(L"DeviceInfo", L"cisImageHeight", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.selfTestState = GetPrivateProfileInt(L"DeviceInfo", L"selfTestState", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.debugState[0] = 22; //
+
+	//TCHAR debugState_[MAX_PATH];
+	//GetPrivateProfileString(L"DeviceInfo", L"debugState",L"",debugState, MAX_PATH,GetExPath() + L"DEVICEINFO.ini");
+	//CString str;
+	//str.Format(L"%s", debugState_);
+	////std::string str_(str.GetBuffer()); str.ReleaseBuffer();
+	//for (int i = 0; i<sizeof(str); i++)
+	//{
+	//}
+
+	//设备信息，下位机返回
+	cmd.packetHeader_ = hd;
+	cmd.deviceInfo_ = deviceInfo;
+	//int size = sizeof(TCHAR);  //2字节
+	//设置下位机时间，下位机返回
+	returnTime.signatures[0] = 'R';
+	returnTime.signatures[1] = 'P';
+	returnTime.status = (unsigned short)0x0000;
+	returnTime.count = 0; //请求计数
+	returnTime.length = (unsigned int)0x0000;  //??
+	//CIS增益校准表,下位机返回
+	cisTable.signatures[0] = 'R';
+	cisTable.signatures[1] = 'P';
+	cisTable.status = (unsigned short)0x0000;
+	cisTable.count = 0;
+	cisTable.length = (unsigned int)0xB400;
+	for (int side = 0; side < CIS_COUNT; side++) {
+		for (int color = 0; color < COLOR_COUNT; color++) {
+			for (int x = 0; x < CIS_IMAGE_WIDTH; x++) {
+				for (int level = 0; level < 256; level++) {
+					cisTable.data[side][color][x][level] = level;
+				}
+			}
+		}
+	}
+
 }

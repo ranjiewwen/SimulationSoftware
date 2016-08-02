@@ -21,7 +21,7 @@ public:
   void Attach(SOCKET s);
   bool GetAddress(sockaddr *addr, int *addrLen);
 
-private:
+ public:
   SOCKET  socket_;
   CInitSock c;
 };

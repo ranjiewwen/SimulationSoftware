@@ -52,8 +52,10 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -102,6 +104,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CInitSock.h" />
+    <ClInclude Include="common.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SimulationSoftware.h" />
     <ClInclude Include="SimulationSoftwareDlg.h" />
@@ -110,6 +113,9 @@
     <ClInclude Include="tcp_socket.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="common.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="SimulationSoftware.cpp" />
     <ClCompile Include="SimulationSoftwareDlg.cpp" />
     <ClCompile Include="stdafx.cpp">

@@ -6,6 +6,8 @@
 #include "afxwin.h"
 //#include "TCP_Server.h"
 #include "tcp_socket.h"
+#include "common.h"
+
 // CSimulationSoftwareDlg 对话框
 class CSimulationSoftwareDlg : public CDialogEx
 {
@@ -16,6 +18,7 @@ public:
 // 对话框数据
 	enum { IDD = IDD_SIMULATIONSOFTWARE_DIALOG };
 	char szText[256];
+	void InitCommandParameter();
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
@@ -30,11 +33,19 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
-public:
+private:
 	afx_msg void OnBnClickedOk();
 	CButton m_stateBtn;
 	BOOL m_checkState;
 //	TCP_Server *serverSocket;
 	TcpSocket *serverSocket_;
+	TcpSocket recvSocker_;
 	afx_msg void OnBnClickedStatebutton();
+private:
+	PacketHeader hd;
+	DeviceInfo  deviceInfo;
+	Response_ cmd;
+	PacketHeader returnTime;
+	CISTable cisTable;
 };
+

@@ -7,8 +7,7 @@
 
 TcpSocket::TcpSocket()
   : socket_(INVALID_SOCKET) {
-	ULONG ul = 1;
-	::ioctlsocket(socket_, FIONBIO, (ULONG*)&ul);//设为非阻塞模式
+
 }
 
 TcpSocket::~TcpSocket() {
@@ -99,7 +98,25 @@ SOCKET TcpSocket::Accept(int waitMilliseconds) {
     if (s == INVALID_SOCKET) {
       SetLastError(WSAGetLastError());
     }
-	printf("接收到连接（%s）\n", ::inet_ntoa(addr.sin_addr));
+	//TRACE("接收到连接（%s）\n", ::inet_ntoa(addr.sin_addr));
+
+	//char szText[256];
+	//int nRecv = ::recv(s, szText, strlen(szText), 0);
+	//if (nRecv == SOCKET_ERROR)
+	//{
+	//	TRACE("接收错误...");
+	//}
+	//if (nRecv > 0)						// （2）可读
+	//{
+	//	szText[nRecv] = '\0';
+	//	TRACE("接收到数据：%s \n", szText);
+	//}
+	//else								// （3）连接关闭、重启或者中断
+	//{
+	//	::closesocket(s);
+	//	TRACE("链接关闭....");
+	//	//return true;
+	//}
 
     return s;
   } else {
