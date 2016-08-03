@@ -13,6 +13,98 @@
 #define new DEBUG_NEW
 #endif
 
+// device control command IDs
+#define COMMAND_GET_SN                      0x0001
+#define COMMAND_SET_DEVICE_INFO             0x0002
+#define COMMAND_UPDATE_DEBUG_STATE          0x0003
+#define COMMAND_UPGRADE                     0x0004
+#define COMMAND_UPGRADE_DATA                0x0005
+#define COMMAND_RESTART                     0x0006
+#define COMMAND_ECHO                        0x8181
+//#define COMMAND_GET_IR_PARAMETERS           0x0003
+#define COMMAND_GET_IR_VALUES               0x0007
+#define COMMAND_SET_IR_PARAMETERS           0x0008
+#define COMMAND_UPDATE_IR_PARAMETERS        0x0009
+#define COMMAND_START_MASTER_SIGNAL_DETECT  0x0006
+#define COMMAND_GET_CIS_PARAMETER           0x0009
+#define COMMAND_TAKE_CIS_IMAGE              0x000a
+#define COMMAND_SET_CIS_PARAMETER           0x000b
+#define COMMAND_UPDATE_CIS_PARAMETER        0x000c
+#define COMMAND_GET_CIS_CORRECTION_TABLE    0x000d
+#define COMMAND_UPDATE_CIS_CORRECTION_TABLE 0x000e
+#define COMMAND_GET_MAC						0x0011
+#define COMMAND_GET_STUDY_COMPLETED_STATE   0x0012
+#define COMMAND_SET_AGING_TIME              0x0013
+#define COMMAND_START_TAPE_STUDY            0x0014
+#define COMMAND_START_MOTOR                 0x0015
+#define COMMAND_START_RUN_CASH_DETECT       0x8004
+#define COMMAND_START_SIGNAL_COLLECT        0x0016
+#define COMMAND_DISABLE_DEBUG               0x0017
+#define COMMAND_SET_TIME                    0x0018
+#define COMMAND_GET_TIME                    0x0019
+#define COMMAND_LIGHT_CIS                   0x0020
+#define COMMAND_SET_SN                      0x0021
+#define COMMAND_TAPE_LEARNING				0x0022
+
+
+// CommandResult
+CommandResult::CommandResult()
+: dataLength_(0)
+, status_(0) {
+	dataBuffer_ = staticBuffer_;
+}
+
+CommandResult::~CommandResult() {
+	if (dataBuffer_ != staticBuffer_) {
+		delete[] dataBuffer_;
+	}
+}
+
+bool CommandResult::IsOk() const {
+	return status_ == 0;
+}
+
+int CommandResult::GetStatus() const {
+	return status_;
+}
+
+int CommandResult::GetDataLength() const {
+	return dataLength_;
+}
+
+const void *CommandResult::GetData() const {
+	return dataBuffer_;
+}
+
+int CommandResult::GetData(void *buffer, int size) {
+	if (size > dataLength_) {
+		size = dataLength_;
+	}
+	if (size > 0) {
+		memcpy(buffer, dataBuffer_, size);
+	}
+	return size;
+}
+
+void *CommandResult::GetDataBuffer(int length) {
+	if (dataBuffer_ != staticBuffer_) {
+		delete[] dataBuffer_;
+	}
+	if (length > STATIC_BUFFER_SIZE) {
+		dataBuffer_ = new char[length];
+	}
+	else {
+		dataBuffer_ = staticBuffer_;
+	}
+	dataLength_ = length;
+
+	return dataBuffer_;
+}
+
+void CommandResult::SetStatus(int code) {
+	status_ = code;
+}
+
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
@@ -207,7 +299,7 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		m_stateBtn.SetWindowText(L"点钞机打开");
 		serverSocket_ = new TcpSocket;
 
-		if (serverSocket_->Listen(1234))
+		if (serverSocket_->Listen(L"172.16.100.174",1234))
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
 		SOCKET s = serverSocket_->Accept(100);
 		recvSocker_.Attach(s);
@@ -226,63 +318,89 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 				//char recvBuffer[256];
 				//recvSocker_.Receive(recvBuffer,sizeof(recvBuffer)); //可行
 
-				char szText[256];
-				int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
-				if (nRecv == SOCKET_ERROR)
+				CommandResult result;
+				if (!ReadResult(&result))
 				{
-					TRACE("接收错误...");
-					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收错误退出...");
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...");
 					break;
 				}
-				if (nRecv > 0)						// （2）可读
+				GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+				if (result.GetStatus() == 0x0002)
 				{
-					szText[nRecv] = '\0';
-					TRACE("接收到数据：%s \n", szText);
-
-					//char Sendbuff[100] = { 0 };
-					//sprintf(Sendbuff, "this zhangsan");
-					//::send(s, Sendbuff, strlen(Sendbuff + 1), 0);
-
-					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
-				//	break;
+					if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
+					{
+						recvSocker_.Close();
+					}				
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
 				}
-				if (nRecv==0)				      // （3）连接关闭、重启或者中断
+				if (result.GetStatus() == 0x0018)
 				{
-					::closesocket(s);
-					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件主动断开与服务端的连接...");
-					//m_checkState = false;
-					m_stateBtn.SetWindowText(L"关闭再次开机");
-					TRACE("链接关闭....");
-					//return true;
-					break;
+					SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
 				}
-				
-			/*	char* sendBuffer = new char[sizeof(DeviceInfo)];
-				memset(sendBuffer, 0, sizeof(sendBuffer));
-				memcpy(sendBuffer, &deviceInfo, sizeof(DeviceInfo));
-				int len_send=send(s,sendBuffer,sizeof(sendBuffer),0);*/  //有问题
-				
-				//应该先检验一下收到的包是否正确，然后再send;没有做校验
-				int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
-				if (len_send==SOCKET_ERROR)
+				if (result.GetStatus()==0x000d)
 				{
-					OutputDebugString(L"发送失败....");  //MFC 用trace
-				}
-				
-				int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
-
-				int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
-
-				int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
-
-				int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
-
-				if (len_send3 == SOCKET_ERROR)
-				{
-					OutputDebugString(L"发送失败....");  //MFC 用trace
+					SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisTable.data,sizeof(cisTable.data));
 				}
 
-				
+				if (result.GetStatus()==0x8181)
+				{
+					SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
+				}
+			//	char szText[256];
+			//	int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
+			//	if (nRecv == SOCKET_ERROR)
+			//	{
+			//		TRACE("接收错误...");
+			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收错误退出...");
+			//		break;
+			//	}
+			//	if (nRecv > 0)						// （2）可读
+			//	{
+			//		szText[nRecv] = '\0';
+			//		TRACE("接收到数据：%s \n", szText);
+
+			//		//char Sendbuff[100] = { 0 };
+			//		//sprintf(Sendbuff, "this zhangsan");
+			//		//::send(s, Sendbuff, strlen(Sendbuff + 1), 0);
+
+			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+			//	//	break;
+			//	}
+			//	if (nRecv==0)				      // （3）连接关闭、重启或者中断
+			//	{
+			//		::closesocket(s);
+			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件主动断开与服务端的连接...");
+			//		//m_checkState = false;
+			//		m_stateBtn.SetWindowText(L"关闭再次开机");
+			//		TRACE("链接关闭....");
+			//		//return true;
+			//		break;
+			//	}
+			//	
+			///*	char* sendBuffer = new char[sizeof(DeviceInfo)];
+			//	memset(sendBuffer, 0, sizeof(sendBuffer));
+			//	memcpy(sendBuffer, &deviceInfo, sizeof(DeviceInfo));
+			//	int len_send=send(s,sendBuffer,sizeof(sendBuffer),0);*/  //有问题
+			//	
+			//	//应该先检验一下收到的包是否正确，然后再send;没有做校验
+			//	int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
+			//	if (len_send==SOCKET_ERROR)
+			//	{
+			//		OutputDebugString(L"发送失败....");  //MFC 用trace
+			//	}
+			//	
+			//	int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
+
+			//	int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
+
+			//	int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
+
+			//	int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
+
+			//	if (len_send3 == SOCKET_ERROR)
+			//	{
+			//		OutputDebugString(L"发送失败....");  //MFC 用trace
+			//	}			
 		   }
 		}
 	}
@@ -293,6 +411,77 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		serverSocket_->Close();
 	}
 }
+//发送一个指令 Echo
+bool CSimulationSoftwareDlg::SendCommand(int id) {
+	return SendCommand(id, NULL, 0);
+}
+//发送带有负载的指令
+bool CSimulationSoftwareDlg::SendCommand(int id, const void *data, int dataLength) {
+	return SendCommand(id, 0, data, dataLength);
+}
+//发送有计数，带负载的指令
+bool CSimulationSoftwareDlg::SendCommand(int id, int count, const void *data, int dataLength) {
+	CommandResult result;
+	if (!SendCommand(id, data, dataLength, &result)) {
+		return false;
+	}
+	if (!result.IsOk()) {
+	//	SetLastError(ERROR_DEVICE_RESULT_ERROR);
+		return false;
+	}
+	return true;
+}
+//发送指令，并检验result
+bool CSimulationSoftwareDlg::SendCommand(int id, const void *data, int dataLength, CommandResult *result) {
+	return SendCommand(id, 0, data, dataLength, result);
+}
+//发送指令，计数，检验result
+bool CSimulationSoftwareDlg::SendCommand(int id, int count, const void *data, int dataLength, CommandResult *result) {
+	ASSERT(result != NULL);
+
+	if (!SendCommandNoResult(id, count, data, dataLength)) {
+		return false;
+	}
+	return ReadResult(result);
+}
+//发送包头和数据
+bool CSimulationSoftwareDlg::SendCommandNoResult(int id, int count, const void *data, int dataLength) {
+	PacketHeader hd;
+	hd.signatures[0] = 'R';
+	hd.signatures[1] = 'P';
+	hd.id = (unsigned short)0x0000;
+	hd.count = 0;
+	hd.length = dataLength;
+	if (!recvSocker_.Send(&hd, sizeof(hd))) {
+		return false;
+	}
+	if (dataLength > 0) {
+		if (!recvSocker_.Send(data, dataLength)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool CSimulationSoftwareDlg::ReadResult(CommandResult *result) {
+	ASSERT(result != NULL);
+
+	PacketHeader hd;
+	if (!recvSocker_.ReceiveFully(&hd, sizeof(hd))) {
+		return false;
+	}
+	if (hd.signatures[0] != 'R' || hd.signatures[1] != 'Q') {
+	//	SetLastError(ERROR_DEVICE_RESULT_ERROR);
+		return false;
+	}
+	result->SetStatus(hd.status);
+	if (hd.length > 0) {
+		if (!recvSocker_.ReceiveFully(result->GetDataBuffer(hd.length), hd.length)) {
+			return false;
+		}
+	}
+	return true;
+}
 
 
 void CSimulationSoftwareDlg::InitCommandParameter()
@@ -302,17 +491,17 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	hd.signatures[1] = 'P';
 	hd.status = (unsigned short)0x0000;
 	hd.count = 0; //请求计数
-	hd.length = (unsigned int)0xC8;  //??
+	hd.length = (unsigned int)0xC8;  //200
 
 	//发送DeviceInfo信息
 	memset(&deviceInfo, 0, sizeof(deviceInfo));
 
-	//CString deviceInfo_sn;
-	//GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
-	//deviceInfo_sn.ReleaseBuffer(); 
-	//strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));
+	/*CString deviceInfo_sn;
+	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo_sn.ReleaseBuffer();
+	strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));*/
 
-	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", (LPWSTR)deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
 	GetPrivateProfileString(L"DeviceInfo", L"model", L"", (LPWSTR)deviceInfo.model, sizeof(deviceInfo.model), GetExPath() + L"DEVICEINFO.ini");
 	GetPrivateProfileString(L"DeviceInfo", L"firmwareVersion", L"", (LPWSTR)deviceInfo.firmwareVersion, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
 

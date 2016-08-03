@@ -105,9 +105,11 @@
   <ItemGroup>
     <ClInclude Include="CInitSock.h" />
     <ClInclude Include="common.h" />
+    <ClInclude Include="error.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SimulationSoftware.h" />
     <ClInclude Include="SimulationSoftwareDlg.h" />
+    <ClInclude Include="singleton.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="tcp_socket.h" />
@@ -116,6 +118,7 @@
     <ClCompile Include="common.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="error.cpp" />
     <ClCompile Include="SimulationSoftware.cpp" />
     <ClCompile Include="SimulationSoftwareDlg.cpp" />
     <ClCompile Include="stdafx.cpp">

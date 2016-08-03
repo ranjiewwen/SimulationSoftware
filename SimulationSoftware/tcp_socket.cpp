@@ -54,10 +54,10 @@ bool TcpSocket::Connect(LPCTSTR address, int port, int milliseconds/* = 2000*/) 
   return true;
 }
 
-bool TcpSocket::Listen(/*LPCTSTR address,*/ int port) {
+bool TcpSocket::Listen(LPCTSTR address, int port) {
   sockaddr_in addr;
   addr.sin_family = AF_INET;
-  addr.sin_addr.S_un.S_addr = INADDR_ANY;
+  addr.sin_addr.S_un.S_addr = inet_addr(CT2A(address));
   addr.sin_port = htons(port);
 
   return Listen((const sockaddr *)&addr, sizeof(addr));

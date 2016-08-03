@@ -7,7 +7,7 @@ public:
   virtual ~TcpSocket();
   
   bool Connect(LPCTSTR address, int port, int milliseconds = 2000);
-  bool Listen(/*LPCTSTR address,*/ int port);
+  bool Listen(LPCTSTR address, int port);
   bool Listen(const sockaddr *addr, int addrLength);
   SOCKET Accept(int waitMilliseconds);
   bool SetTimeout(int milliseconds);
@@ -21,7 +21,7 @@ public:
   void Attach(SOCKET s);
   bool GetAddress(sockaddr *addr, int *addrLen);
 
- public:
+private:
   SOCKET  socket_;
   CInitSock c;
 };
