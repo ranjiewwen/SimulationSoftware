@@ -176,8 +176,8 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		m_stateBtn.SetWindowText(L"点钞机打开");
 		serverSocket_ = new TcpSocket;
 
-		if (serverSocket_->Listen(L"172.16.100.174",1234))
-		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
+		if (serverSocket_->Listen(L"172.16.100.174", 1234))
+			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
 		SOCKET s = serverSocket_->Accept(100);
 		recvSocker_.Attach(s);
 		recvSocker_.SetRecvBufferSize(1024);
@@ -190,87 +190,132 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机已连接到生产管理软件...");
 
-			while (TRUE)
-			{
-				CommandResult result;
-				if (!ReadResult(&result))
-				{
-					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...");
-					break;
-				}
-				GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
-				if (result.GetStatus() == 0x0002)
-				{
-					if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
-					{
-						recvSocker_.Close();
-					}				
-					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
-				}
-				if (result.GetStatus() == 0x0018)
-				{
-					SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
-				}
-				if (result.GetStatus()==0x000d)
-				{
-					SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisCorrectionTable_.data,sizeof(cisCorrectionTable_));
-				}
+			start();
 
-				if (result.GetStatus()==0x8181)
-				{
-					SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
-				}
-			//	char szText[256];
-			//	int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
-			//	if (nRecv == SOCKET_ERROR)
-			//	{
-			//		TRACE("接收错误...");
-			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收错误退出...");
-			//		break;
-			//	}
-			//	if (nRecv > 0)						// （2）可读
-			//	{
-			//		szText[nRecv] = '\0';
-			//		TRACE("接收到数据：%s \n", szText);
-			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
-			//	//	break;
-			//	}
-			//	if (nRecv==0)				      // （3）连接关闭、重启或者中断
-			//	{
-			//		::closesocket(s);
-			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件主动断开与服务端的连接...");
-			//		//m_checkState = false;
-			//		m_stateBtn.SetWindowText(L"关闭再次开机");
-			//		TRACE("链接关闭....");
-			//		//return true;
-			//		break;
-			//	}
-			//	
-			//	//应该先检验一下收到的包是否正确，然后再send;没有做校验
-			//	int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
-			//	if (len_send==SOCKET_ERROR)
-			//	{
-			//		OutputDebugString(L"发送失败....");  //MFC 用trace
-			//	}
-			//	
-			//	int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
-			//	int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
-			//	int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
-			//	int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
-			//	if (len_send3 == SOCKET_ERROR)
-			//	{
-			//		OutputDebugString(L"发送失败....");  //MFC 用trace
-			//	}			
-		   }
+
+		//	while (TRUE)
+		//	{
+		//		CommandResult result;
+		//		if (!ReadResult(&result))
+		//		{
+		//			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...");
+		//			break;
+		//		}
+		//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+		//		if (result.GetStatus() == 0x0002)
+		//		{
+		//			if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
+		//			{
+		//				recvSocker_.Close();
+		//			}				
+		//			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
+		//		}
+		//		if (result.GetStatus() == 0x0018)
+		//		{
+		//			SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
+		//		}
+		//		if (result.GetStatus()==0x000d)
+		//		{
+		//			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisCorrectionTable_.data,sizeof(cisCorrectionTable_));
+		//		}
+
+		//		if (result.GetStatus()==0x8181)
+		//		{
+		//			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
+		//		}
+		//	//	char szText[256];
+		//	//	int nRecv = ::recv(s, szText, strlen(szText), 0);  //判断链接成功的socket收到的回包
+		//	//	if (nRecv == SOCKET_ERROR)
+		//	//	{
+		//	//		TRACE("接收错误...");
+		//	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收错误退出...");
+		//	//		break;
+		//	//	}
+		//	//	if (nRecv > 0)						// （2）可读
+		//	//	{
+		//	//		szText[nRecv] = '\0';
+		//	//		TRACE("接收到数据：%s \n", szText);
+		//	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+		//	//	//	break;
+		//	//	}
+		//	//	if (nRecv==0)				      // （3）连接关闭、重启或者中断
+		//	//	{
+		//	//		::closesocket(s);
+		//	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件主动断开与服务端的连接...");
+		//	//		//m_checkState = false;
+		//	//		m_stateBtn.SetWindowText(L"关闭再次开机");
+		//	//		TRACE("链接关闭....");
+		//	//		//return true;
+		//	//		break;
+		//	//	}
+		//	//	
+		//	//	//应该先检验一下收到的包是否正确，然后再send;没有做校验
+		//	//	int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
+		//	//	if (len_send==SOCKET_ERROR)
+		//	//	{
+		//	//		OutputDebugString(L"发送失败....");  //MFC 用trace
+		//	//	}
+		//	//	
+		//	//	int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
+		//	//	int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
+		//	//	int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
+		//	//	int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
+		//	//	if (len_send3 == SOCKET_ERROR)
+		//	//	{
+		//	//		OutputDebugString(L"发送失败....");  //MFC 用trace
+		//	//	}			
+		//   }
 		}
 	}
-	else
+	else  //服务端主动关闭
 	{
 		m_stateBtn.SetWindowText(L"点钞机关闭");
-		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");
 		serverSocket_->Close();
+		stop();
+		//m_processing = false;
+		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");	
 	}
 }
+
+void CSimulationSoftwareDlg::process()
+{
+	while (m_processing)
+	{
+		CommandResult result;
+		if (!ReadResult(&result))
+		{
+			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...有可能客户端主动关闭连接...");
+			serverSocket_->Close();
+			//m_stateBtn.SetState(false);
+			m_checkState = false;
+			m_stateBtn.SetWindowText(L"关闭-点钞机");
+			break;
+		}
+		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+		if (result.GetStatus() == 0x0002)
+		{
+			if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
+			{
+				recvSocker_.Close();
+			}
+			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
+		}
+		if (result.GetStatus() == 0x0018)
+		{
+			SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
+		}
+		if (result.GetStatus() == 0x000d)
+		{
+			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE, 0, &cisCorrectionTable_.data, sizeof(cisCorrectionTable_));
+		}
+		if (result.GetStatus() == 0x8181)
+		{
+			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
+		}
+	}
+
+}
+
 //发送一个指令 Echo
 bool CSimulationSoftwareDlg::SendCommand(int id) {
 	return SendCommand(id, NULL, 0);
@@ -309,7 +354,7 @@ bool CSimulationSoftwareDlg::SendCommandNoResult(int id, int count, const void *
 	PacketHeader hd;
 	hd.signatures[0] = 'R';
 	hd.signatures[1] = 'P';
-	hd.id = (unsigned short)0x0000;
+	hd.id = (unsigned short)0x0000;  //id根本就没有用了
 	hd.count = 0;
 	hd.length = dataLength;
 	if (!recvSocker_.Send(&hd, sizeof(hd))) {
