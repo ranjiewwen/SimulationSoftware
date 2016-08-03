@@ -7,30 +7,7 @@
 //#include "TCP_Server.h"
 #include "tcp_socket.h"
 #include "common.h"
-
-// class CommandResult
-class CommandResult {
-public:
-	CommandResult();
-	virtual ~CommandResult();
-
-	bool IsOk() const;
-	int GetStatus() const;
-	int GetDataLength() const;
-	const void *GetData() const;
-	int GetData(void *buffer, int size);
-	void *GetDataBuffer(int length);
-	void SetStatus(int code);
-
-private:
-	enum { STATIC_BUFFER_SIZE = 128 };
-
-	int   status_;
-	char  staticBuffer_[STATIC_BUFFER_SIZE];
-	char  *dataBuffer_;
-	int   dataLength_;
-};
-
+#include "CommandResult.h"
 
 // CSimulationSoftwareDlg ¶Ô»°¿ò
 class CSimulationSoftwareDlg : public CDialogEx
@@ -61,19 +38,13 @@ private:
 	afx_msg void OnBnClickedOk();
 	CButton m_stateBtn;
 	BOOL m_checkState;
-//	TCP_Server *serverSocket;
 	TcpSocket *serverSocket_;
 	TcpSocket recvSocker_;
 	afx_msg void OnBnClickedStatebutton();
 private:
-	PacketHeader hd;
+	
 	DeviceInfo  deviceInfo;
-	Response_ cmd;
-	PacketHeader returnTime;
-	CISTable cisTable;
-	updateHeader updateCmd;
-	PacketHeader upgradeDate;
-
+	CISCorrectionTable  cisCorrectionTable_;
 private:
 	bool SendCommand(int id);
 	bool SendCommand(int id, const void *data, int dataLength);

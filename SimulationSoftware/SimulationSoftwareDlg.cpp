@@ -13,98 +13,6 @@
 #define new DEBUG_NEW
 #endif
 
-// device control command IDs
-#define COMMAND_GET_SN                      0x0001
-#define COMMAND_SET_DEVICE_INFO             0x0002
-#define COMMAND_UPDATE_DEBUG_STATE          0x0003
-#define COMMAND_UPGRADE                     0x0004
-#define COMMAND_UPGRADE_DATA                0x0005
-#define COMMAND_RESTART                     0x0006
-#define COMMAND_ECHO                        0x8181
-//#define COMMAND_GET_IR_PARAMETERS           0x0003
-#define COMMAND_GET_IR_VALUES               0x0007
-#define COMMAND_SET_IR_PARAMETERS           0x0008
-#define COMMAND_UPDATE_IR_PARAMETERS        0x0009
-#define COMMAND_START_MASTER_SIGNAL_DETECT  0x0006
-#define COMMAND_GET_CIS_PARAMETER           0x0009
-#define COMMAND_TAKE_CIS_IMAGE              0x000a
-#define COMMAND_SET_CIS_PARAMETER           0x000b
-#define COMMAND_UPDATE_CIS_PARAMETER        0x000c
-#define COMMAND_GET_CIS_CORRECTION_TABLE    0x000d
-#define COMMAND_UPDATE_CIS_CORRECTION_TABLE 0x000e
-#define COMMAND_GET_MAC						0x0011
-#define COMMAND_GET_STUDY_COMPLETED_STATE   0x0012
-#define COMMAND_SET_AGING_TIME              0x0013
-#define COMMAND_START_TAPE_STUDY            0x0014
-#define COMMAND_START_MOTOR                 0x0015
-#define COMMAND_START_RUN_CASH_DETECT       0x8004
-#define COMMAND_START_SIGNAL_COLLECT        0x0016
-#define COMMAND_DISABLE_DEBUG               0x0017
-#define COMMAND_SET_TIME                    0x0018
-#define COMMAND_GET_TIME                    0x0019
-#define COMMAND_LIGHT_CIS                   0x0020
-#define COMMAND_SET_SN                      0x0021
-#define COMMAND_TAPE_LEARNING				0x0022
-
-
-// CommandResult
-CommandResult::CommandResult()
-: dataLength_(0)
-, status_(0) {
-	dataBuffer_ = staticBuffer_;
-}
-
-CommandResult::~CommandResult() {
-	if (dataBuffer_ != staticBuffer_) {
-		delete[] dataBuffer_;
-	}
-}
-
-bool CommandResult::IsOk() const {
-	return status_ == 0;
-}
-
-int CommandResult::GetStatus() const {
-	return status_;
-}
-
-int CommandResult::GetDataLength() const {
-	return dataLength_;
-}
-
-const void *CommandResult::GetData() const {
-	return dataBuffer_;
-}
-
-int CommandResult::GetData(void *buffer, int size) {
-	if (size > dataLength_) {
-		size = dataLength_;
-	}
-	if (size > 0) {
-		memcpy(buffer, dataBuffer_, size);
-	}
-	return size;
-}
-
-void *CommandResult::GetDataBuffer(int length) {
-	if (dataBuffer_ != staticBuffer_) {
-		delete[] dataBuffer_;
-	}
-	if (length > STATIC_BUFFER_SIZE) {
-		dataBuffer_ = new char[length];
-	}
-	else {
-		dataBuffer_ = staticBuffer_;
-	}
-	dataLength_ = length;
-
-	return dataBuffer_;
-}
-
-void CommandResult::SetStatus(int code) {
-	status_ = code;
-}
-
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
@@ -138,7 +46,6 @@ END_MESSAGE_MAP()
 
 
 // CSimulationSoftwareDlg 对话框
-
 
 
 CSimulationSoftwareDlg::CSimulationSoftwareDlg(CWnd* pParent /*=NULL*/)
@@ -264,36 +171,6 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 {
 	// TODO:  在此添加控件通知处理程序代码
 	UpdateData(TRUE);
-	
-	//if (m_checkState)
-	//{
-	//	m_stateBtn.SetWindowText(L"点钞机打开");
-	//	serverSocket = new TCP_Server(1234, inet_addr("172.16.100.174"));
-	//	GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");	
-	//	
-	//	if (serverSocket->process()==INVALID_SOCKET)
-	//	{
-	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机连接到生产管理软件失败...");
-	//	}
-	//	else
-	//	{
-	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机已连接到生产管理软件...");
-	//	}
- // //      //客户端主动关闭连接
-	//	//if (serverSocket->clientIsClose())
-	//	//{
-	//	//	GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"生产管理软件断开与服务端的连接...");
-	//	//	m_checkState = false;
-	//	//	m_stateBtn.SetWindowText(L"点钞机关闭");
-	//	//}
-	//}
-	//else
-	//{
-	//	m_stateBtn.SetWindowText(L"点钞机关闭");
-	//	GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");
-	//	serverSocket->Close();
-	//}
-
 	if (m_checkState)
 	{
 		m_stateBtn.SetWindowText(L"点钞机打开");
@@ -315,9 +192,6 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 
 			while (TRUE)
 			{
-				//char recvBuffer[256];
-				//recvSocker_.Receive(recvBuffer,sizeof(recvBuffer)); //可行
-
 				CommandResult result;
 				if (!ReadResult(&result))
 				{
@@ -339,7 +213,7 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 				}
 				if (result.GetStatus()==0x000d)
 				{
-					SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisTable.data,sizeof(cisTable.data));
+					SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisCorrectionTable_.data,sizeof(cisCorrectionTable_));
 				}
 
 				if (result.GetStatus()==0x8181)
@@ -358,11 +232,6 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 			//	{
 			//		szText[nRecv] = '\0';
 			//		TRACE("接收到数据：%s \n", szText);
-
-			//		//char Sendbuff[100] = { 0 };
-			//		//sprintf(Sendbuff, "this zhangsan");
-			//		//::send(s, Sendbuff, strlen(Sendbuff + 1), 0);
-
 			//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
 			//	//	break;
 			//	}
@@ -377,11 +246,6 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 			//		break;
 			//	}
 			//	
-			///*	char* sendBuffer = new char[sizeof(DeviceInfo)];
-			//	memset(sendBuffer, 0, sizeof(sendBuffer));
-			//	memcpy(sendBuffer, &deviceInfo, sizeof(DeviceInfo));
-			//	int len_send=send(s,sendBuffer,sizeof(sendBuffer),0);*/  //有问题
-			//	
 			//	//应该先检验一下收到的包是否正确，然后再send;没有做校验
 			//	int len_send = send(s, (char*)&cmd, sizeof(cmd), 0);
 			//	if (len_send==SOCKET_ERROR)
@@ -390,13 +254,9 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 			//	}
 			//	
 			//	int len_send2 = send(s, (char*)&returnTime, sizeof(returnTime), 0);
-
 			//	int len_send3 = send(s, (char*)&cisTable, sizeof(cisTable), 0);
-
 			//	int len_send4 = send(s, (char*)&updateCmd, sizeof(updateCmd), 0);
-
 			//	int len_send5 = send(s, (char*)&upgradeDate, sizeof(upgradeDate), 0);
-
 			//	if (len_send3 == SOCKET_ERROR)
 			//	{
 			//		OutputDebugString(L"发送失败....");  //MFC 用trace
@@ -486,13 +346,6 @@ bool CSimulationSoftwareDlg::ReadResult(CommandResult *result) {
 
 void CSimulationSoftwareDlg::InitCommandParameter()
 {
-	
-	hd.signatures[0] = 'R';
-	hd.signatures[1] = 'P';
-	hd.status = (unsigned short)0x0000;
-	hd.count = 0; //请求计数
-	hd.length = (unsigned int)0xC8;  //200
-
 	//发送DeviceInfo信息
 	memset(&deviceInfo, 0, sizeof(deviceInfo));
 
@@ -525,43 +378,14 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	//{
 	//}
 
-	//设备信息，下位机返回
-	cmd.packetHeader_ = hd;
-	cmd.deviceInfo_ = deviceInfo;
-	//int size = sizeof(TCHAR);  //2字节
-	//设置下位机时间，下位机返回
-	returnTime.signatures[0] = 'R';
-	returnTime.signatures[1] = 'P';
-	returnTime.status = (unsigned short)0x0000;
-	returnTime.count = 0; //请求计数
-	returnTime.length = (unsigned int)0x0000;  //??
-	//CIS增益校准表,下位机返回
-	cisTable.signatures[0] = 'R';
-	cisTable.signatures[1] = 'P';
-	cisTable.status = (unsigned short)0x0000;
-	cisTable.count = 0;
-	cisTable.length = (unsigned int)0xB4000;
 	for (int side = 0; side < CIS_COUNT; side++) {
 		for (int color = 0; color < COLOR_COUNT; color++) {
 			for (int x = 0; x < CIS_IMAGE_WIDTH; x++) {
 				for (int level = 0; level < 256; level++) {
-					cisTable.data[side][color][x][level] = level;
+					cisCorrectionTable_.data[side][color][x][level] = level;
 				}
 			}
 		}
 	}
-	//升级固件，下位机返回
-	updateCmd.signatures[0] = 'R';
-	updateCmd.signatures[1] = 'P';
-	updateCmd.status = (unsigned short)0x0000;
-	updateCmd.count = 0;
-	updateCmd.length = 4;
-	updateCmd.numOfBlock = 4;
-
-	//升级数据包，下位机返回
-	upgradeDate.signatures[0] = 'R';
-	upgradeDate.signatures[1] = 'P';
-	upgradeDate.status = (unsigned short)0x0000;
-	upgradeDate.count = 0; //请求计数
-	upgradeDate.length = (unsigned int)0x0000;  
+		
 }

@@ -104,6 +104,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CInitSock.h" />
+    <ClInclude Include="CommandResult.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="Resource.h" />
@@ -115,6 +116,7 @@
     <ClInclude Include="tcp_socket.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CommandResult.cpp" />
     <ClCompile Include="common.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
