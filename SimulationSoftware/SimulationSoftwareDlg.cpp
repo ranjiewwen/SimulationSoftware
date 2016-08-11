@@ -54,6 +54,7 @@ CSimulationSoftwareDlg::CSimulationSoftwareDlg(CWnd* pParent /*=NULL*/)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
     InitCommandParameter();
+	serverSocket_ = new TcpSocket;
 }
 
 void CSimulationSoftwareDlg::DoDataExchange(CDataExchange* pDX)
@@ -171,16 +172,17 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 {
 	// TODO:  在此添加控件通知处理程序代码
 	UpdateData(TRUE);
+
 	if (m_checkState)
 	{
 		m_stateBtn.SetWindowText(L"点钞机打开");
-		serverSocket_ = new TcpSocket;
-
+		m_processing = false;
+		
 		if (serverSocket_->Listen(L"172.16.100.174", 1234))
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
 		SOCKET s = serverSocket_->Accept(100);
 		recvSocker_.Attach(s);
-		recvSocker_.SetRecvBufferSize(1024);
+		//recvSocker_.SetRecvBufferSize(1024);
 
 		if (s==INVALID_SOCKET)
 		{
@@ -271,32 +273,40 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 	{
 		m_stateBtn.SetWindowText(L"点钞机关闭");
 		serverSocket_->Close();
+	//	delete serverSocket_;
+
 		stop();
-		//m_processing = false;
+		m_processing = false;
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");	
 	}
 }
 
 void CSimulationSoftwareDlg::process()
 {
+
 	while (m_processing)
 	{
 		CommandResult result;
-		if (!ReadResult(&result))
+
+		if (!ReadResult(&result))  //没有结果主动和被动关闭都有可能
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...有可能客户端主动关闭连接...");
 			serverSocket_->Close();
+			//delete serverSocket_;
 			//m_stateBtn.SetState(false);
-			m_checkState = false;
+			//m_checkState = false;
 			m_stateBtn.SetWindowText(L"关闭-点钞机");
 			break;
 		}
-		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+		else
+		{
+			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+		}
 		if (result.GetStatus() == 0x0002)
 		{
 			if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
 			{
-				recvSocker_.Close();
+				serverSocket_->Close();
 			}
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
 		}
@@ -306,12 +316,53 @@ void CSimulationSoftwareDlg::process()
 		}
 		if (result.GetStatus() == 0x000d)
 		{
+			
 			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE, 0, &cisCorrectionTable_.data, sizeof(cisCorrectionTable_));
 		}
-		if (result.GetStatus() == 0x8181)
+		if (result.GetStatus() == 0x0004)
 		{
+			//int length = result.dataLength_; //private
+			SendCommandNoResult(COMMAND_UPGRADE, 0, &length_, sizeof(length_));
+		}
+		if (result.GetStatus()==0x0005)
+		{
+			SendCommandNoResult(COMMAND_UPGRADE_DATA,0,0,0);
+			//可以接收升级数据
+
+		}
+		if (result.GetStatus()==0x0003)
+		{
+			SendCommandNoResult(COMMAND_UPDATE_DEBUG_STATE, 0, 0, 0);
+		}
+		if (result.GetStatus()==0x0006)
+		{		
+			SendCommandNoResult(COMMAND_RESTART, 0, 0, 0);
+			
+			serverSocket_->Close();
+			//delete serverSocket_;	
+		    //m_checkState = false;
+			m_processing = false;
+			m_stateBtn.SetWindowText(L"重启点钞机");
+
+
+			/*	
+			if (!serverSocket_->IsOpened())  //不加需手动重启
+					{
+					if (serverSocket_->Listen(L"172.16.100.174", 1234))
+					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
+					SOCKET s = serverSocket_->Accept(10);
+					recvSocker_.Attach(s);
+					m_processing = true;
+					}
+					*/
+
+		}
+
+		if (result.GetStatus() == 0x8181)
+		{		
 			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
 		}
+
 	}
 
 }
@@ -394,24 +445,24 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	//发送DeviceInfo信息
 	memset(&deviceInfo, 0, sizeof(deviceInfo));
 
-	/*CString deviceInfo_sn;
-	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo_sn.ReleaseBuffer();
-	strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));*/
-
-	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", (LPWSTR)deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
-	GetPrivateProfileString(L"DeviceInfo", L"model", L"", (LPWSTR)deviceInfo.model, sizeof(deviceInfo.model), GetExPath() + L"DEVICEINFO.ini");
-	GetPrivateProfileString(L"DeviceInfo", L"firmwareVersion", L"", (LPWSTR)deviceInfo.firmwareVersion, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	//CString deviceInfo_sn;
+	//GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
+	//deviceInfo_sn.ReleaseBuffer();
+	//strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));
+	//	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", (LPWSTR)deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");  //以TCHAR的方式
+	TCHAR device_sn[128];    GetPrivateProfileString(TEXT("DeviceInfo"), TEXT("sn"), NULL, device_sn, _countof(device_sn), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.sn,CT2A(device_sn));
+	TCHAR device_model[128]; GetPrivateProfileString(L"DeviceInfo", L"model", L"", device_model, sizeof(device_model), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.model,CT2A(device_model));
+	TCHAR deviec_firmV[128]; GetPrivateProfileString(L"DeviceInfo", L"firmwareVersion", L"", deviec_firmV, sizeof(deviec_firmV), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.firmwareVersion, CT2A(deviec_firmV));
 
 	deviceInfo.numberOfCIS = GetPrivateProfileInt(L"DeviceInfo", L"numberOfCIS", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.numberOfIR = GetPrivateProfileInt(L"DeviceInfo", L"numberOfIR", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.numberOfMH = GetPrivateProfileInt(L"DeviceInfo", L"numberOfMH", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.reserved = GetPrivateProfileInt(L"DeviceInfo", L"reserved", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.numberOfIR =  GetPrivateProfileInt(L"DeviceInfo", L"numberOfIR", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.numberOfMH =  GetPrivateProfileInt(L"DeviceInfo", L"numberOfMH", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.reserved =    GetPrivateProfileInt(L"DeviceInfo", L"reserved", 0, GetExPath() + L"DEVICEINFO.ini");
 
-	deviceInfo.cisColorFlags = GetPrivateProfileInt(L"DeviceInfo", L"cisColorFlags", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.cisImageWidth = GetPrivateProfileInt(L"DeviceInfo", L"cisImageWidth", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.cisColorFlags =  GetPrivateProfileInt(L"DeviceInfo", L"cisColorFlags", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.cisImageWidth =  GetPrivateProfileInt(L"DeviceInfo", L"cisImageWidth", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.cisImageHeight = GetPrivateProfileInt(L"DeviceInfo", L"cisImageHeight", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.selfTestState = GetPrivateProfileInt(L"DeviceInfo", L"selfTestState", 0, GetExPath() + L"DEVICEINFO.ini");
+	deviceInfo.selfTestState =  GetPrivateProfileInt(L"DeviceInfo", L"selfTestState", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.debugState[0] = 22; //
 
 	//TCHAR debugState_[MAX_PATH];
@@ -432,5 +483,5 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 			}
 		}
 	}
-		
+	length_.length = 2048;
 }

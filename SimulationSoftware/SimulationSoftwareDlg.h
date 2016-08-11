@@ -35,15 +35,18 @@ protected:
 	DECLARE_MESSAGE_MAP()
 private:
 	afx_msg void OnBnClickedOk();
+	afx_msg void OnBnClickedStatebutton();
 	CButton m_stateBtn;
 	BOOL m_checkState;
 	TcpSocket *serverSocket_;
 	TcpSocket recvSocker_;
-	afx_msg void OnBnClickedStatebutton();
+	
+	//SOCKET s;
 private:
 	
 	DeviceInfo  deviceInfo;
 	CISCorrectionTable  cisCorrectionTable_;
+	upgradeLength length_;
 private:
 	bool SendCommand(int id);
 	bool SendCommand(int id, const void *data, int dataLength);
@@ -74,9 +77,8 @@ public:
 		m_processing = false;
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		if (m_thrProcess.joinable())
-			m_thrProcess.join();
-		//复位操作
-		//reset();
+			m_thrProcess.join();  //可被 joinable 的 std::thread 对象必须在他们销毁之前被主线程 join 或者将其设置为 detached.
+	
 	}
 
 };
