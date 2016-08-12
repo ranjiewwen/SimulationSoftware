@@ -269,7 +269,7 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		//   }
 		}
 	}
-	else  //服务端主动关闭
+	else  //服务端主动关闭  //貌似正常情况下会卡住
 	{
 		m_stateBtn.SetWindowText(L"点钞机关闭");
 		serverSocket_->Close();
@@ -287,7 +287,6 @@ void CSimulationSoftwareDlg::process()
 	while (m_processing)
 	{
 		CommandResult result;
-
 		if (!ReadResult(&result))  //没有结果主动和被动关闭都有可能
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...有可能客户端主动关闭连接...");
@@ -315,12 +314,23 @@ void CSimulationSoftwareDlg::process()
 			SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
 		}
 		if (result.GetStatus() == 0x000d)
-		{
-			
+		{			
 			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE, 0, &cisCorrectionTable_.data, sizeof(cisCorrectionTable_));
 		}
 		if (result.GetStatus() == 0x0004)
-		{
+		{		
+			//更新ini文件的版本，重启时下位机才能更新
+			struct UpgradeRequest {
+				char newVersion[12];
+				int length;
+			};
+			UpgradeRequest request;
+			ZeroMemory(&request, sizeof(request));
+			strncpy( (char*)&request, (char*)result.GetDataBuffer(sizeof(request)), sizeof(request));
+
+			//strncpy(request.newVersion, CT2A(newVersion), _countof(request.newVersion));
+			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion",/*(LPCWSTR)request.newVersion*/L"1.0.15", GetExPath() + L"DEVICEINFO.ini");
+
 			//int length = result.dataLength_; //private
 			SendCommandNoResult(COMMAND_UPGRADE, 0, &length_, sizeof(length_));
 		}
@@ -328,11 +338,17 @@ void CSimulationSoftwareDlg::process()
 		{
 			SendCommandNoResult(COMMAND_UPGRADE_DATA,0,0,0);
 			//可以接收升级数据
-
+			CFile file(_T("f:\\firmware.dat"), CFile::modeCreate | CFile::modeWrite | CFile::typeBinary);
+			//file.Write(L"hello",10);
+			file.Write(result.GetData(), result.GetDataLength());
+			file.Close();
 		}
 		if (result.GetStatus()==0x0003)
 		{
 			SendCommandNoResult(COMMAND_UPDATE_DEBUG_STATE, 0, 0, 0);
+			//接收调试状态
+			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion",/*(LPCWSTR)request.newVersion*/L"23", GetExPath() + L"DEVICEINFO.ini");
+
 		}
 		if (result.GetStatus()==0x0006)
 		{		
@@ -343,19 +359,18 @@ void CSimulationSoftwareDlg::process()
 		    //m_checkState = false;
 			m_processing = false;
 			m_stateBtn.SetWindowText(L"重启点钞机");
-
-
-			/*	
+				
 			if (!serverSocket_->IsOpened())  //不加需手动重启
-					{
-					if (serverSocket_->Listen(L"172.16.100.174", 1234))
+			{
+				if (serverSocket_->Listen(L"172.16.100.174", 1234))
 					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
-					SOCKET s = serverSocket_->Accept(10);
-					recvSocker_.Attach(s);
-					m_processing = true;
-					}
-					*/
-
+				SOCKET s = serverSocket_->Accept(10);
+				recvSocker_.Attach(s);
+				m_processing = true;
+				m_stateBtn.SetWindowText(L"点钞机打开");
+				InitCommandParameter();
+			}
+					
 		}
 
 		if (result.GetStatus() == 0x8181)
@@ -463,7 +478,7 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	deviceInfo.cisImageWidth =  GetPrivateProfileInt(L"DeviceInfo", L"cisImageWidth", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.cisImageHeight = GetPrivateProfileInt(L"DeviceInfo", L"cisImageHeight", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.selfTestState =  GetPrivateProfileInt(L"DeviceInfo", L"selfTestState", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.debugState[0] = 22; //
+	deviceInfo.debugState[0] = 22; //22
 
 	//TCHAR debugState_[MAX_PATH];
 	//GetPrivateProfileString(L"DeviceInfo", L"debugState",L"",debugState, MAX_PATH,GetExPath() + L"DEVICEINFO.ini");
