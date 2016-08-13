@@ -51,6 +51,7 @@ END_MESSAGE_MAP()
 CSimulationSoftwareDlg::CSimulationSoftwareDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CSimulationSoftwareDlg::IDD, pParent)
 	, m_checkState(false)
+	, m_isPalcePaper(FALSE)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
     InitCommandParameter();
@@ -62,6 +63,8 @@ void CSimulationSoftwareDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_STATEBUTTON, m_stateBtn);
 	DDX_Check(pDX, IDC_STATEBUTTON, m_checkState);
+	DDX_Control(pDX, IDC_CHECK_PALCEPAPER, m_placePaper);
+	DDX_Check(pDX, IDC_CHECK_PALCEPAPER, m_isPalcePaper);
 }
 
 BEGIN_MESSAGE_MAP(CSimulationSoftwareDlg, CDialogEx)
@@ -70,6 +73,7 @@ BEGIN_MESSAGE_MAP(CSimulationSoftwareDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDOK, &CSimulationSoftwareDlg::OnBnClickedOk)
 	ON_BN_CLICKED(IDC_STATEBUTTON, &CSimulationSoftwareDlg::OnBnClickedStatebutton)
+	ON_BN_CLICKED(IDC_CHECK_PALCEPAPER, &CSimulationSoftwareDlg::OnBnClickedPalcePaper)
 END_MESSAGE_MAP()
 
 
@@ -320,35 +324,41 @@ void CSimulationSoftwareDlg::process()
 		if (result.GetStatus() == 0x0004)
 		{		
 			//更新ini文件的版本，重启时下位机才能更新
-			struct UpgradeRequest {
-				char newVersion[12];
-				int length;
-			};
 			UpgradeRequest request;
 			ZeroMemory(&request, sizeof(request));
-			strncpy( (char*)&request, (char*)result.GetDataBuffer(sizeof(request)), sizeof(request));
-
-			//strncpy(request.newVersion, CT2A(newVersion), _countof(request.newVersion));
-			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion",/*(LPCWSTR)request.newVersion*/L"1.0.15", GetExPath() + L"DEVICEINFO.ini");
-
+			//result.GetData(&request, sizeof(request));
+			CopyMemory(&request,result.GetData(),sizeof(UpgradeRequest));
+			//strncpy( (char*)&request, (char*)result.GetDataBuffer(sizeof(request)), sizeof(request));
+			TCHAR temp[128];
+		    //strcpy_s(temp, request.newVersion);
+			MultiByteToWideChar(CP_ACP, 0, request.newVersion, -1, temp, 100);
+			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion", temp/*(LPCWSTR)request.newVersion*//*L"1.0.15"*/, GetExPath() + L"DEVICEINFO.ini");
 			//int length = result.dataLength_; //private
 			SendCommandNoResult(COMMAND_UPGRADE, 0, &length_, sizeof(length_));
 		}
 		if (result.GetStatus()==0x0005)
-		{
-			SendCommandNoResult(COMMAND_UPGRADE_DATA,0,0,0);
-			//可以接收升级数据
-			CFile file(_T("f:\\firmware.dat"), CFile::modeCreate | CFile::modeWrite | CFile::typeBinary);
-			//file.Write(L"hello",10);
+		{		
+			//可以接收升级数据			
+			if (result.GetDataLength()<sizeof(length_))   //最后一次失败
+			{
+				TRACE("receive failed...");
+			}
+			CFile file(_T("f:\\firmware.dat"),  CFile::modeWrite | CFile::typeBinary);  //CFile::modeCreate
+			file.SeekToEnd();
 			file.Write(result.GetData(), result.GetDataLength());
 			file.Close();
+			SendCommandNoResult(COMMAND_UPGRADE_DATA, 0, 0, 0);
+
 		}
 		if (result.GetStatus()==0x0003)
-		{
-			SendCommandNoResult(COMMAND_UPDATE_DEBUG_STATE, 0, 0, 0);
+		{	
 			//接收调试状态
-			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion",/*(LPCWSTR)request.newVersion*/L"23", GetExPath() + L"DEVICEINFO.ini");
-
+			int states[16] = { 0 };
+			result.GetData(states, sizeof(states));
+			CString strTemp;
+			strTemp.Format(L"%d", states[0]);
+			WritePrivateProfileString(L"DeviceInfo", L"debugState[1]",/*L"23"*/strTemp, GetExPath() + L"DEVICEINFO.ini");
+			SendCommandNoResult(COMMAND_UPDATE_DEBUG_STATE, 0, 0, 0);
 		}
 		if (result.GetStatus()==0x0006)
 		{		
@@ -370,16 +380,59 @@ void CSimulationSoftwareDlg::process()
 				m_stateBtn.SetWindowText(L"点钞机打开");
 				InitCommandParameter();
 			}
-					
-		}
 
+			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"请放纸校验...");
+		}
 		if (result.GetStatus() == 0x8181)
 		{		
 			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
 		}
+		if (result.GetStatus()==0x0008)
+		{
+			//获取发射管的值
+			emissionValues[IR_COUNT] = { 0 };
+			emissionValues_[IR_COUNT] = { 0 };
+			if (m_isPalcePaper)
+			{
+				result.GetData(emissionValues, sizeof(emissionValues));
+			}
+			else
+			{
+				result.GetData(emissionValues_, sizeof(emissionValues_));
+			}
+			SendCommandNoResult(COMMAND_SET_IR_PARAMETERS,0,NULL,0);
+		}
+		if (result.GetStatus()==0x0007)
+		{
+			//根据发射管的值，线性计算接收管的值
+			if (m_isPalcePaper)
+			{
+				for (int i = 0; i < IR_COUNT; i++)
+				{
+					collectionValues[i] = (emissionValues[i] - 1300) / 22 + 650;  //除取整
+				}
+				SendCommandNoResult(COMMAND_GET_IR_VALUES, 0, collectionValues, IR_COUNT * sizeof(int));
+			}
+			else
+			{
+				for (int i = 0; i < IR_COUNT; i++)
+				{
+					collectionValues_[i] = (emissionValues_[i] - 1300)*2 /11  + 3600;  //除取整
+				}
+				SendCommandNoResult(COMMAND_GET_IR_VALUES, 0, collectionValues_, IR_COUNT * sizeof(int));
+			}
+		}
+		if (result.GetStatus()==0x0015)
+		{
+			//电机转动指令时，有纸状态变为无纸状态
+			m_isPalcePaper = false;
+			m_placePaper.SetWindowText(L"无纸状态");
+			SendCommandNoResult(COMMAND_START_MOTOR, 0, 0, 0);
+		}
+
+
 
 	}
-
 }
 
 //发送一个指令 Echo
@@ -464,7 +517,7 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	//GetPrivateProfileString(L"DeviceInfo", L"sn", L"", deviceInfo_sn.GetBuffer(MAX_PATH), MAX_PATH, GetExPath() + L"DEVICEINFO.ini");
 	//deviceInfo_sn.ReleaseBuffer();
 	//strncpy_s(deviceInfo.sn, (LPSTR)(LPCTSTR)deviceInfo_sn, sizeof(deviceInfo_sn));
-	//	GetPrivateProfileString(L"DeviceInfo", L"sn", L"", (LPWSTR)deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");  //以TCHAR的方式
+	//GetPrivateProfileString(L"DeviceInfo", L"sn", L"", (LPWSTR)deviceInfo.sn, MAX_PATH, GetExPath() + L"DEVICEINFO.ini");  //以TCHAR的方式
 	TCHAR device_sn[128];    GetPrivateProfileString(TEXT("DeviceInfo"), TEXT("sn"), NULL, device_sn, _countof(device_sn), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.sn,CT2A(device_sn));
 	TCHAR device_model[128]; GetPrivateProfileString(L"DeviceInfo", L"model", L"", device_model, sizeof(device_model), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.model,CT2A(device_model));
 	TCHAR deviec_firmV[128]; GetPrivateProfileString(L"DeviceInfo", L"firmwareVersion", L"", deviec_firmV, sizeof(deviec_firmV), GetExPath() + L"DEVICEINFO.ini"); strcpy_s(deviceInfo.firmwareVersion, CT2A(deviec_firmV));
@@ -478,16 +531,7 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 	deviceInfo.cisImageWidth =  GetPrivateProfileInt(L"DeviceInfo", L"cisImageWidth", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.cisImageHeight = GetPrivateProfileInt(L"DeviceInfo", L"cisImageHeight", 0, GetExPath() + L"DEVICEINFO.ini");
 	deviceInfo.selfTestState =  GetPrivateProfileInt(L"DeviceInfo", L"selfTestState", 0, GetExPath() + L"DEVICEINFO.ini");
-	deviceInfo.debugState[0] = 22; //22
-
-	//TCHAR debugState_[MAX_PATH];
-	//GetPrivateProfileString(L"DeviceInfo", L"debugState",L"",debugState, MAX_PATH,GetExPath() + L"DEVICEINFO.ini");
-	//CString str;
-	//str.Format(L"%s", debugState_);
-	////std::string str_(str.GetBuffer()); str.ReleaseBuffer();
-	//for (int i = 0; i<sizeof(str); i++)
-	//{
-	//}
+	deviceInfo.debugState[0] = GetPrivateProfileInt(L"DeviceInfo", L"debugState[1]", 0, GetExPath() + L"DEVICEINFO.ini");; //22
 
 	for (int side = 0; side < CIS_COUNT; side++) {
 		for (int color = 0; color < COLOR_COUNT; color++) {
@@ -499,4 +543,14 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 		}
 	}
 	length_.length = 2048;
+}
+
+void CSimulationSoftwareDlg::OnBnClickedPalcePaper()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	UpdateData(TRUE);
+	if (m_isPalcePaper)
+	{
+		m_placePaper.SetWindowText(L"放纸校验");
+	}
 }

@@ -58,6 +58,12 @@ private:
 public:
 	char szText[256];
 	void InitCommandParameter();
+	enum{ IR_COUNT = 6 };
+	int emissionValues[IR_COUNT];
+	int emissionValues_[IR_COUNT];
+	int collectionValues[IR_COUNT];
+	int collectionValues_[IR_COUNT];
+
 protected:
 	bool m_processing{ false }; //线程退出标识
 	std::thread m_thrProcess;//线程句柄
@@ -80,6 +86,9 @@ public:
 			m_thrProcess.join();  //可被 joinable 的 std::thread 对象必须在他们销毁之前被主线程 join 或者将其设置为 detached.
 	
 	}
-
+public:
+	afx_msg void OnBnClickedPalcePaper();
+	CButton m_placePaper;
+	BOOL m_isPalcePaper;
 };
 
