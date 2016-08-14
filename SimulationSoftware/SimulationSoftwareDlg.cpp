@@ -65,6 +65,7 @@ void CSimulationSoftwareDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Check(pDX, IDC_STATEBUTTON, m_checkState);
 	DDX_Control(pDX, IDC_CHECK_PALCEPAPER, m_placePaper);
 	DDX_Check(pDX, IDC_CHECK_PALCEPAPER, m_isPalcePaper);
+	DDX_Control(pDX, IDC_DISPLAY_LIST, m_displayListBox);
 }
 
 BEGIN_MESSAGE_MAP(CSimulationSoftwareDlg, CDialogEx)
@@ -176,14 +177,16 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 {
 	// TODO:  在此添加控件通知处理程序代码
 	UpdateData(TRUE);
-
 	if (m_checkState)
 	{
 		m_stateBtn.SetWindowText(L"点钞机打开");
 		m_processing = false;
 		
 		if (serverSocket_->Listen(L"172.16.100.174", 1234))
+		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
+			m_displayListBox.AddString(L"点钞机打开，监听生产管理软件的请求...");
+		}
 		SOCKET s = serverSocket_->Accept(100);
 		recvSocker_.Attach(s);
 		//recvSocker_.SetRecvBufferSize(1024);
@@ -191,40 +194,13 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 		if (s==INVALID_SOCKET)
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机连接到生产管理软件失败...");
+			m_displayListBox.AddString(L"点钞机连接到生产管理软件失败...");
 		}
 		else
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机已连接到生产管理软件...");
-
+			m_displayListBox.AddString(L"点钞机已连接到生产管理软件...");
 			start();
-
-
-		//	while (TRUE)
-		//	{
-		//		CommandResult result;
-		//		if (!ReadResult(&result))
-		//		{
-		//			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...");
-		//			break;
-		//		}
-		//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
-		//		if (result.GetStatus() == 0x0002)
-		//		{
-		//			if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
-		//			{
-		//				recvSocker_.Close();
-		//			}				
-		//			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
-		//		}
-		//		if (result.GetStatus() == 0x0018)
-		//		{
-		//			SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
-		//		}
-		//		if (result.GetStatus()==0x000d)
-		//		{
-		//			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE,0,&cisCorrectionTable_.data,sizeof(cisCorrectionTable_));
-		//		}
-
 		//		if (result.GetStatus()==0x8181)
 		//		{
 		//			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
@@ -277,11 +253,13 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 	{
 		m_stateBtn.SetWindowText(L"点钞机关闭");
 		serverSocket_->Close();
+		recvSocker_.Close();
 	//	delete serverSocket_;
 
-		stop();
+		//stop();
 		m_processing = false;
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");	
+		m_displayListBox.AddString(L"点钞机关闭，断开与生产管理软件的连接...");
 	}
 }
 
@@ -294,6 +272,8 @@ void CSimulationSoftwareDlg::process()
 		if (!ReadResult(&result))  //没有结果主动和被动关闭都有可能
 		{
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据失败...有可能客户端主动关闭连接...");
+			m_displayListBox.AddString(L"接收到数据失败...有可能客户端主动关闭连接....");
+
 			serverSocket_->Close();
 			//delete serverSocket_;
 			//m_stateBtn.SetState(false);
@@ -303,26 +283,34 @@ void CSimulationSoftwareDlg::process()
 		}
 		else
 		{
-			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"接收到数据,等待发送数据...");
+	//		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"ReadResult为false，当接收到命令时，回复命令...");
+	//		m_displayListBox.AddString(L"ReadResult为false，当接收到命令时，才回复命令...");
 		}
 		if (result.GetStatus() == 0x0002)
 		{
+			CriticalSection::ScopedLocker locker(criSec_);
 			if (!SendCommandNoResult(COMMAND_SET_DEVICE_INFO, 0, &deviceInfo, sizeof(deviceInfo)))
 			{
 				serverSocket_->Close();
 			}
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"发送设备信息数据...");
+			m_displayListBox.AddString(L"回复 COMMAND_SET_DEVICE_INFO 命令...");
 		}
 		if (result.GetStatus() == 0x0018)
 		{
+			CriticalSection::ScopedLocker locker(criSec_);
 			SendCommandNoResult(COMMAND_SET_TIME, 0, 0, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_SET_TIME 命令...");
 		}
 		if (result.GetStatus() == 0x000d)
-		{			
+		{	
+			CriticalSection::ScopedLocker locker(criSec_);
 			SendCommandNoResult(COMMAND_GET_CIS_CORRECTION_TABLE, 0, &cisCorrectionTable_.data, sizeof(cisCorrectionTable_));
+			m_displayListBox.AddString(L"回复 COMMAND_GET_CIS_CORRECTION_TABLE 命令...");
 		}
 		if (result.GetStatus() == 0x0004)
-		{		
+		{	
+			CriticalSection::ScopedLocker locker(criSec_);
 			//更新ini文件的版本，重启时下位机才能更新
 			UpgradeRequest request;
 			ZeroMemory(&request, sizeof(request));
@@ -335,9 +323,11 @@ void CSimulationSoftwareDlg::process()
 			WritePrivateProfileString(L"DeviceInfo", L"firmwareVersion", temp/*(LPCWSTR)request.newVersion*//*L"1.0.15"*/, GetExPath() + L"DEVICEINFO.ini");
 			//int length = result.dataLength_; //private
 			SendCommandNoResult(COMMAND_UPGRADE, 0, &length_, sizeof(length_));
+			m_displayListBox.AddString(L"回复 COMMAND_UPGRADE 命令，接收到newVersion保存ini,下次更新...");
 		}
 		if (result.GetStatus()==0x0005)
-		{		
+		{	
+			CriticalSection::ScopedLocker locker(criSec_);
 			//可以接收升级数据			
 			if (result.GetDataLength()<sizeof(length_))   //最后一次失败
 			{
@@ -348,22 +338,26 @@ void CSimulationSoftwareDlg::process()
 			file.Write(result.GetData(), result.GetDataLength());
 			file.Close();
 			SendCommandNoResult(COMMAND_UPGRADE_DATA, 0, 0, 0);
-
+			m_displayListBox.AddString(L"回复 COMMAND_UPGRADE_DATA 命令，保存更新的数据包dat...");
 		}
-		if (result.GetStatus()==0x0003)
+		if (result.GetStatus()==0x0003)  //服务端调试状态怎么计算的？
 		{	
+			CriticalSection::ScopedLocker locker(criSec_);
 			//接收调试状态
 			int states[16] = { 0 };
 			result.GetData(states, sizeof(states));
 			CString strTemp;
 			strTemp.Format(L"%d", states[0]);
 			WritePrivateProfileString(L"DeviceInfo", L"debugState[1]",/*L"23"*/strTemp, GetExPath() + L"DEVICEINFO.ini");
+			
 			SendCommandNoResult(COMMAND_UPDATE_DEBUG_STATE, 0, 0, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_UPDATE_DEBUG_STATE 命令，保存调试状态ini并更新...");
 		}
 		if (result.GetStatus()==0x0006)
 		{		
+			CriticalSection::ScopedLocker locker(criSec_);
 			SendCommandNoResult(COMMAND_RESTART, 0, 0, 0);
-			
+			m_displayListBox.AddString(L"回复 COMMAND_RESTART 命令，尝试重启点钞机...");
 			serverSocket_->Close();
 			//delete serverSocket_;	
 		    //m_checkState = false;
@@ -372,8 +366,12 @@ void CSimulationSoftwareDlg::process()
 				
 			if (!serverSocket_->IsOpened())  //不加需手动重启
 			{
+				m_displayListBox.AddString(L"正在重启点钞机...重发三条指令...");
 				if (serverSocket_->Listen(L"172.16.100.174", 1234))
+				{
 					GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机打开，监听生产管理软件的请求...");
+					m_displayListBox.AddString(L"点钞机重启成功，进入IR界面...监听生产管理软件的请求...");
+				}
 				SOCKET s = serverSocket_->Accept(10);
 				recvSocker_.Attach(s);
 				m_processing = true;
@@ -382,55 +380,74 @@ void CSimulationSoftwareDlg::process()
 			}
 
 			GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"请放纸校验...");
+			m_displayListBox.AddString(L"请放纸校验....！！！！");
 		}
 		if (result.GetStatus() == 0x8181)
-		{		
+		{	
+			CriticalSection::ScopedLocker locker(criSec_);
 			SendCommandNoResult(COMMAND_ECHO, 0, 0, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_ECHO 命令...");
 		}
 		if (result.GetStatus()==0x0008)
 		{
+			CriticalSection::ScopedLocker locker(criSec_);
 			//获取发射管的值
 			emissionValues[IR_COUNT] = { 0 };
 			emissionValues_[IR_COUNT] = { 0 };
 			if (m_isPalcePaper)
 			{
 				result.GetData(emissionValues, sizeof(emissionValues));
+				SendCommandNoResult(COMMAND_SET_IR_PARAMETERS, 0, NULL, 0);
+				m_displayListBox.AddString(L"回复 COMMAND_SET_IR_PARAMETERS 命令，保存发射管值，有纸状态...");
 			}
 			else
 			{
 				result.GetData(emissionValues_, sizeof(emissionValues_));
+				SendCommandNoResult(COMMAND_SET_IR_PARAMETERS, 0, NULL, 0);
+				m_displayListBox.AddString(L"回复 COMMAND_SET_IR_PARAMETERS 命令，保存发射管值，无纸状态...");
 			}
-			SendCommandNoResult(COMMAND_SET_IR_PARAMETERS,0,NULL,0);
 		}
 		if (result.GetStatus()==0x0007)
 		{
+			CriticalSection::ScopedLocker locker(criSec_);
 			//根据发射管的值，线性计算接收管的值
 			if (m_isPalcePaper)
 			{
 				for (int i = 0; i < IR_COUNT; i++)
 				{
-					collectionValues[i] = (emissionValues[i] - 1300) / 22 + 650;  //除取整
+					collectionValues[i] = (emissionValues[i] - 1300) *100/ 2200 + 650;  //除取整
 				}
 				SendCommandNoResult(COMMAND_GET_IR_VALUES, 0, collectionValues, IR_COUNT * sizeof(int));
+				m_displayListBox.AddString(L"回复 COMMAND_SET_IR_PARAMETERS 命令，有纸状态，发送发射管值...");
 			}
 			else
 			{
 				for (int i = 0; i < IR_COUNT; i++)
 				{
-					collectionValues_[i] = (emissionValues_[i] - 1300)*2 /11  + 3600;  //除取整
+					collectionValues_[i] = (emissionValues_[i] - 1300)*400 /2200  + 3600;  //除取整
 				}
 				SendCommandNoResult(COMMAND_GET_IR_VALUES, 0, collectionValues_, IR_COUNT * sizeof(int));
+				m_displayListBox.AddString(L"回复 COMMAND_SET_IR_PARAMETERS 命令，无纸状态，发送发射管值...");
 			}
 		}
 		if (result.GetStatus()==0x0015)
 		{
+			CriticalSection::ScopedLocker locker(criSec_);
 			//电机转动指令时，有纸状态变为无纸状态
 			m_isPalcePaper = false;
 			m_placePaper.SetWindowText(L"无纸状态");
 			SendCommandNoResult(COMMAND_START_MOTOR, 0, 0, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_START_MOTOR 命令，启动电机，确保无纸状态...");
 		}
+		if (result.GetStatus()==0x0009)
+		{
+			CriticalSection::ScopedLocker locker(criSec_);
+			//保存更新后的发射参数
 
-
+			SendCommandNoResult(COMMAND_UPDATE_IR_PARAMETERS, 0, NULL, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_UPDATE_IR_PARAMETERS 命令...");
+		}
+	
 
 	}
 }

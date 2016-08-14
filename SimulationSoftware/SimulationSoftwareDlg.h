@@ -9,7 +9,7 @@
 #include "CommandResult.h"
 #include<iostream>
 #include <thread>
-
+#include "CriticalSection.h"
 // CSimulationSoftwareDlg 对话框
 class CSimulationSoftwareDlg : public CDialogEx
 {
@@ -43,7 +43,7 @@ private:
 	
 	//SOCKET s;
 private:
-	
+	CriticalSection     criSec_;
 	DeviceInfo  deviceInfo;
 	CISCorrectionTable  cisCorrectionTable_;
 	upgradeLength length_;
@@ -86,9 +86,10 @@ public:
 			m_thrProcess.join();  //可被 joinable 的 std::thread 对象必须在他们销毁之前被主线程 join 或者将其设置为 detached.
 	
 	}
-public:
+private:
 	afx_msg void OnBnClickedPalcePaper();
 	CButton m_placePaper;
 	BOOL m_isPalcePaper;
+	CListBox m_displayListBox;
 };
 

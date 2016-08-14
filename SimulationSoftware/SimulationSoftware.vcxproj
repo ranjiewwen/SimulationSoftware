@@ -106,6 +106,7 @@
     <ClInclude Include="CInitSock.h" />
     <ClInclude Include="CommandResult.h" />
     <ClInclude Include="common.h" />
+    <ClInclude Include="CriticalSection.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SimulationSoftware.h" />
@@ -120,6 +121,7 @@
     <ClCompile Include="common.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="CriticalSection.cpp" />
     <ClCompile Include="error.cpp" />
     <ClCompile Include="SimulationSoftware.cpp" />
     <ClCompile Include="SimulationSoftwareDlg.cpp" />
