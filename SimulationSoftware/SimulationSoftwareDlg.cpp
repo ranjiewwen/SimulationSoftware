@@ -180,7 +180,7 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 	if (m_checkState)
 	{
 		m_stateBtn.SetWindowText(L"点钞机打开");
-		m_processing = false;
+		//m_processing = true;
 		
 		if (serverSocket_->Listen(L"172.16.100.174", 1234))
 		{
@@ -253,11 +253,11 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 	{
 		m_stateBtn.SetWindowText(L"点钞机关闭");
 		serverSocket_->Close();
-		recvSocker_.Close();
+		//recvSocker_.Close();
 	//	delete serverSocket_;
 
-		//stop();
-		m_processing = false;
+		//stop(); //卡住
+		//m_processing = false;  //不关线程，再次打开点钞机时，还可以正常接收数据，但是这样的话不是真正的关闭,乃在发echo，否则，关闭后再次打开没有开启线程;如果真正关闭，其实socket已经变了，C/S都必须重新启动
 		GetDlgItem(IDC_STATIC_TEXT)->SetWindowText(L"点钞机关闭，断开与生产管理软件的连接...");	
 		m_displayListBox.AddString(L"点钞机关闭，断开与生产管理软件的连接...");
 	}
@@ -265,7 +265,6 @@ void CSimulationSoftwareDlg::OnBnClickedStatebutton()
 
 void CSimulationSoftwareDlg::process()
 {
-
 	while (m_processing)
 	{
 		CommandResult result;
