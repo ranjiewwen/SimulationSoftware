@@ -40,13 +40,17 @@ private:
 	BOOL m_checkState;
 	TcpSocket *serverSocket_;
 	TcpSocket recvSocker_;
-	
+	TcpSocket connection_;
 	//SOCKET s;
 private:
 	CriticalSection     criSec_;
 	DeviceInfo  deviceInfo;
 	CISCorrectionTable  cisCorrectionTable_;
 	upgradeLength length_;
+	DataLevel datalevel;
+	CString fileName;
+	char* data_ADC;
+	ADCChannel  adcChannels_[ADC_CHANNEL_COUNT];
 private:
 	bool SendCommand(int id);
 	bool SendCommand(int id, const void *data, int dataLength);
@@ -55,6 +59,8 @@ private:
 	bool SendCommand(int id, int count, const void *data, int dataLength, CommandResult *result);
 	bool SendCommandNoResult(int id, int count, const void *data, int dataLength);
 	bool ReadResult(CommandResult *result);
+private:
+	bool SendDataNoResult(int id,int count,const void* data,int datalength);
 public:
 	char szText[256];
 	void InitCommandParameter();
@@ -91,5 +97,7 @@ private:
 	CButton m_placePaper;
 	BOOL m_isPalcePaper;
 	CListBox m_displayListBox;
+public:
+	afx_msg void OnBnClickedFileChooseButton();
 };
 

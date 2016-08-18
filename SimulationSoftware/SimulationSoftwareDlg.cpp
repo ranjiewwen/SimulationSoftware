@@ -75,6 +75,7 @@ BEGIN_MESSAGE_MAP(CSimulationSoftwareDlg, CDialogEx)
 	ON_BN_CLICKED(IDOK, &CSimulationSoftwareDlg::OnBnClickedOk)
 	ON_BN_CLICKED(IDC_STATEBUTTON, &CSimulationSoftwareDlg::OnBnClickedStatebutton)
 	ON_BN_CLICKED(IDC_CHECK_PALCEPAPER, &CSimulationSoftwareDlg::OnBnClickedPalcePaper)
+	ON_BN_CLICKED(IDC_FILE_BUTTON, &CSimulationSoftwareDlg::OnBnClickedFileChooseButton)
 END_MESSAGE_MAP()
 
 
@@ -447,7 +448,45 @@ void CSimulationSoftwareDlg::process()
 			m_displayListBox.AddString(L"回复 COMMAND_UPDATE_IR_PARAMETERS 命令...");
 		}
 	
+		//接收点钞机的指令，进入数据发送模式，保存走抄数据上传的socket地址
+		if (result.GetStatus()==0x8004)
+		{
+			memset(&datalevel,0,sizeof(DataLevel));
+			CopyMemory(&datalevel,result.GetData(),sizeof(DataLevel));
+			//sockaddr_in dataClient_Addr;
+			//dataClient_Addr = datalevel.hostAddr;
+			const char* ip = inet_ntoa(datalevel.hostAddr.sin_addr);
+			CString deviceIP;
+			//deviceIP.Format(L"%s",ip); //A2T(pChar);
+			USES_CONVERSION;
+			deviceIP = A2T(ip);
+			int devicePort = ntohs(datalevel.hostAddr.sin_port);
+			while (true)
+			{
+				if (!connection_.Connect(deviceIP, devicePort))
+				{
+					TRACE("----与服务端数据通道连接失败........");
+				}
+				else
+				{
+					TRACE("----与服务端数据通道连接成功........");
+					break;
+				}
+			}			
+			SendCommandNoResult(COMMAND_START_RUN_CASH_DETECT, 0, 0, 0);
+			m_displayListBox.AddString(L"回复 COMMAND_START_RUN_CASH_DETECT 命令...");
+			//走钞的流程是：3走钞开始信号--->0主控数据(ADC)--->2图像数据(CIS)---->3钞票信息(info)---->4提钞信号么
+			if (SendDataNoResult(ID_BEGIN_BUNDLE, 0, 0, 0))
+			{
+				m_displayListBox.AddString(L"发送....3走钞开始信号...");
+			}
+		    //准备好发送数据ADC,CIS...
+			if (SendDataNoResult(ID_ADC_DATA,0,data_ADC,sizeof(data_ADC)))
+			{
+				m_displayListBox.AddString(L"0主控数据(ADC)...");
+			}
 
+		}
 	}
 }
 
@@ -497,6 +536,28 @@ bool CSimulationSoftwareDlg::SendCommandNoResult(int id, int count, const void *
 	}
 	if (dataLength > 0) {
 		if (!recvSocker_.Send(data, dataLength)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool CSimulationSoftwareDlg :: SendDataNoResult(int id,int count,const void* data,int datalength)
+{
+	PacketHeader hd;
+	hd.signatures[0] = 'D';
+	hd.signatures[1] = 'T';
+	hd.id = (unsigned short)id; //数据通道区分类型
+	hd.count = count;
+	hd.length = datalength;
+	if (!connection_.Send(&hd,sizeof(hd)))
+	{
+		return false;
+	}
+	if (datalength>0)
+	{
+		if (!connection_.Send(data,datalength))
+		{
 			return false;
 		}
 	}
@@ -559,6 +620,8 @@ void CSimulationSoftwareDlg::InitCommandParameter()
 		}
 	}
 	length_.length = 2048;
+
+	
 }
 
 void CSimulationSoftwareDlg::OnBnClickedPalcePaper()
@@ -569,4 +632,57 @@ void CSimulationSoftwareDlg::OnBnClickedPalcePaper()
 	{
 		m_placePaper.SetWindowText(L"放纸校验");
 	}
+}
+
+
+void CSimulationSoftwareDlg::OnBnClickedFileChooseButton()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	CFileDialog fileDlg(TRUE);
+	if (IDOK==fileDlg.DoModal())
+	{
+		fileName = fileDlg.GetPathName();
+	}
+	CFile file(fileName, CFile::typeBinary | CFile::modeRead);
+	int length = (int)file.GetLength();  //199680/8/20=1248
+	data_ADC = new char[length];
+	UINT ret = file.Read(data_ADC, length);
+
+	//for (int i = 0; i < ADC_CHANNEL_COUNT;i++)
+	//{
+	//	char* temp = data_ADC;
+	//	adcChannels_[i].count = length / 8 / 20;
+	//	adcChannels_[i].codes=
+	//}
+
+	int channelMap[24] = {
+		ADC_CHANNEL_BM, ADC_CHANNEL_IR1, ADC_CHANNEL_EIR5,   //0 12 9
+		ADC_CHANNEL_RSM, ADC_CHANNEL_IR2, ADC_CHANNEL_EIR6,  //2 13 10
+		ADC_CHANNEL_HD, ADC_CHANNEL_IR3, ADC_CHANNEL_UV,     //21 14 18
+		ADC_CHANNEL_LSM, ADC_CHANNEL_IR4, ADC_CHANNEL_UVL,   //1 15 19
+
+		ADC_CHANNEL_BM, ADC_CHANNEL_IR6, ADC_CHANNEL_EIR4,   //0  17 8
+		ADC_CHANNEL_RM, ADC_CHANNEL_IR5, ADC_CHANNEL_EIR1,   //4  16 5
+		ADC_CHANNEL_HD, ADC_CHANNEL_COUNT, ADC_CHANNEL_EIR3, //21  22 7
+		ADC_CHANNEL_LM, ADC_CHANNEL_COUNT, ADC_CHANNEL_EIR2  //3   22 6      //0 22 
+	};
+	char* temp = data_ADC;
+	//while (temp)
+	//{
+	//	adcChannels_[channel].values
+	//	*(short *)tmp = *(value[channelMap[j * 3]] + i);
+	//	if (channelMap[j * 3 + 1] != ADC_CHANNEL_COUNT) //channelMap[22] j=7 or channelMap[19] j=6
+	//	{
+	//		*(short *)(tmp + 4) = *(value[channelMap[j * 3 + 1]] + i);
+	//	}
+	//	*(short *)(tmp + 6) = 2;
+	//	*(short *)(tmp + 8) = *(value[channelMap[j * 3 + 2]] + i);
+	//	*(short *)(tmp + 10) = 4;
+	//	*(short *)(tmp + 12) = *(code + i);
+	//	*(char *)(tmp + 16) = j;  //
+	//	tmp = tmp + 20;
+	//}
+
+
+	//delete []data_ADC;
 }
