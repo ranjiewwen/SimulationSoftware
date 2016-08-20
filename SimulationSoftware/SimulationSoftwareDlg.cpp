@@ -481,11 +481,55 @@ void CSimulationSoftwareDlg::process()
 				m_displayListBox.AddString(L"发送....3走钞开始信号...");
 			}
 		    //准备好发送数据ADC,CIS...
-			if (SendDataNoResult(ID_ADC_DATA,0,data_ADC,sizeof(data_ADC)))
+			char* data = new char[44 + 2 * 100 * 22*2];
+			short* dataCount = new short[22];
+			short* dataCode = new short[100];
+			short* dataVluae = new short[100];
+			//memset(dataCount, 100, 22);  //对多字节赋值问题		
+			for (int i = 0; i < 22;i++)
+			{
+				dataCount[i] = 100;
+			}
+			for (size_t i = 0; i < 100; i++)
+			{
+				dataCode[i] = 1;
+				dataVluae[i] = 2;
+			}
+			memcpy(data, dataCount, sizeof(short)* 22);
+			for (int i = 0; i < 100;i=i+2)
+			{
+			//	memcpy(data + sizeof(short)* 100 * i + sizeof(short)* 22, dataCode, sizeof(short)* 100);   //有问题？
+			//	memcpy(data + sizeof(short)* 100 * i + sizeof(short)* 100 + sizeof(short)* 22, dataVluae, sizeof(short)* 100);
+			}
+			CFile dataflie(_T("C:\\Users\\ranji\\Desktop\\data.dat"), CFile::modeCreate | CFile::modeWrite | CFile::typeBinary);
+			dataflie.Write(data + 44, 44 + 2 * 2 * 100 * 22);
+			dataflie.Close();
+
+			if (SendDataNoResult(ID_ADC_DATA, 0,data,44+2*2*100*22))  //发送数据格式 &deviceInfo, sizeof(deviceInfo)
 			{
 				m_displayListBox.AddString(L"0主控数据(ADC)...");
 			}
+			delete[] dataCount;
+			delete[] dataCode;
+			delete[] dataVluae;
+			delete[] data;
 
+			char* cisData = new char[20];
+			memset(cisData, 1, 20);
+			if (SendDataNoResult(ID_CIS_DATA, 0, cisData, 20))
+			{
+				m_displayListBox.AddString(L"1：图像数据CIS...");
+			}
+
+			delete[] cisData;
+			//if (SendDataNoResult(ID_CASH_INFO, 0, 0, 0))
+			//{
+			//	m_displayListBox.AddString(L"2：钞票信息数据...");
+			//}
+			//if (SendDataNoResult(ID_END_BUNDLE, 0, 0, 0))
+			//{
+			//	m_displayListBox.AddString(L"4：提钞信号...");
+			//}
 		}
 	}
 }
@@ -684,5 +728,5 @@ void CSimulationSoftwareDlg::OnBnClickedFileChooseButton()
 	//}
 
 
-	//delete []data_ADC;
+	delete []data_ADC;
 }
