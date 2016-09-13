@@ -481,42 +481,20 @@ void CSimulationSoftwareDlg::process()
 				m_displayListBox.AddString(L"发送....3走钞开始信号...");
 			}
 		    //准备好发送数据ADC,CIS...
-			char* data = new char[44 + 2 * 100 * 22*2];
-			short* dataCount = new short[22];
-			short* dataCode = new short[100];
-			short* dataVluae = new short[100];
-			//memset(dataCount, 100, 22);  //对多字节赋值问题		
-			for (int i = 0; i < 22;i++)
-			{
-				dataCount[i] = 100;
-			}
-			for (size_t i = 0; i < 100; i++)
-			{
-				dataCode[i] = 1;
-				dataVluae[i] = 2;
-			}
-			memcpy(data, dataCount, sizeof(short)* 22);
-			for (int i = 0; i < 100;i=i+2)
-			{
-			//	memcpy(data + sizeof(short)* 100 * i + sizeof(short)* 22, dataCode, sizeof(short)* 100);   //有问题？
-			//	memcpy(data + sizeof(short)* 100 * i + sizeof(short)* 100 + sizeof(short)* 22, dataVluae, sizeof(short)* 100);
-			}
-			CFile dataflie(_T("C:\\Users\\ranji\\Desktop\\data.dat"), CFile::modeCreate | CFile::modeWrite | CFile::typeBinary);
-			dataflie.Write(data + 44, 44 + 2 * 2 * 100 * 22);
-			dataflie.Close();
-
-			if (SendDataNoResult(ID_ADC_DATA, 0,data,44+2*2*100*22))  //发送数据格式 &deviceInfo, sizeof(deviceInfo)
+		
+			if (SendDataNoResult(ID_ADC_DATA, 0, adcData, 199680))  //发送数据格式 &deviceInfo, sizeof(deviceInfo)
 			{
 				m_displayListBox.AddString(L"0主控数据(ADC)...");
 			}
-			delete[] dataCount;
-			delete[] dataCode;
-			delete[] dataVluae;
-			delete[] data;
 
-			char* cisData = new char[20];
-			memset(cisData, 1, 20);
-			if (SendDataNoResult(ID_CIS_DATA, 0, cisData, 20))
+			//char* cisData = new char[20];
+			//memset(cisData, 1, 20);
+			int cisDataLength = 8 + 720 * 3 * 360 * 2;
+			char *cisData = new char[cisDataLength];
+			((int *)cisData)[0] = 720 * 3;
+			((int *)cisData)[1] = 360;
+
+			if (SendDataNoResult(ID_CIS_DATA, 0, cisData, cisDataLength))
 			{
 				m_displayListBox.AddString(L"1：图像数据CIS...");
 			}
@@ -537,10 +515,10 @@ void CSimulationSoftwareDlg::process()
 			{
 				m_displayListBox.AddString(L"2：钞票信息数据...");
 			}
-			//if (SendDataNoResult(ID_END_BUNDLE, 0, 0, 0))
-			//{
-			//	m_displayListBox.AddString(L"4：提钞信号...");
-			//}
+			if (SendDataNoResult(ID_END_BUNDLE, 0, 0, 0))
+			{
+				m_displayListBox.AddString(L"4：提钞信号...");
+			}
 		}
 	}
 }
@@ -685,6 +663,14 @@ void CSimulationSoftwareDlg::OnBnClickedPalcePaper()
 	{
 		m_placePaper.SetWindowText(L"放纸校验");
 	}
+
+	CFile dataflie;
+	if (!dataflie.Open(L"C:\\Users\\ranji\\Desktop\\adcData.dat", CFile::modeCreate | CFile::modeWrite | CFile::typeBinary))
+	{
+		return;
+	}
+	dataflie.Close();
+
 }
 
 
@@ -697,17 +683,18 @@ void CSimulationSoftwareDlg::OnBnClickedFileChooseButton()
 		fileName = fileDlg.GetPathName();
 	}
 	CFile file(fileName, CFile::typeBinary | CFile::modeRead);
-	int length = (int)file.GetLength();  //199680/8/20=1248
-	data_ADC = new char[length];
-	UINT ret = file.Read(data_ADC, length);
+	int length = (int)file.GetLength();  //199680字节/循环8次发送一个点/20字节一组=1248个点
+	char* fileData = new char[length];
+	memset(fileData, 0, length);
 
-	//for (int i = 0; i < ADC_CHANNEL_COUNT;i++)
-	//{
-	//	char* temp = data_ADC;
-	//	adcChannels_[i].count = length / 8 / 20;
-	//	adcChannels_[i].codes=
-	//}
+	UINT ret = file.Read(fileData, length);
+	short count = length / 8 / 20;
+	char* fileData_ = fileData;
+	char* endPtr = fileData_ + length;
+	file.Close();
 
+	adcData = new char[ADC_CHANNEL_COUNT * 2 + count * ADC_CHANNEL_COUNT * 2 * 2];
+	char* temp = adcData;
 	int channelMap[24] = {
 		ADC_CHANNEL_BM, ADC_CHANNEL_IR1, ADC_CHANNEL_EIR5,   //0 12 9
 		ADC_CHANNEL_RSM, ADC_CHANNEL_IR2, ADC_CHANNEL_EIR6,  //2 13 10
@@ -719,23 +706,53 @@ void CSimulationSoftwareDlg::OnBnClickedFileChooseButton()
 		ADC_CHANNEL_HD, ADC_CHANNEL_COUNT, ADC_CHANNEL_EIR3, //21  22 7
 		ADC_CHANNEL_LM, ADC_CHANNEL_COUNT, ADC_CHANNEL_EIR2  //3   22 6      //0 22 
 	};
-	char* temp = data_ADC;
-	//while (temp)
-	//{
-	//	adcChannels_[channel].values
-	//	*(short *)tmp = *(value[channelMap[j * 3]] + i);
-	//	if (channelMap[j * 3 + 1] != ADC_CHANNEL_COUNT) //channelMap[22] j=7 or channelMap[19] j=6
-	//	{
-	//		*(short *)(tmp + 4) = *(value[channelMap[j * 3 + 1]] + i);
-	//	}
-	//	*(short *)(tmp + 6) = 2;
-	//	*(short *)(tmp + 8) = *(value[channelMap[j * 3 + 2]] + i);
-	//	*(short *)(tmp + 10) = 4;
-	//	*(short *)(tmp + 12) = *(code + i);
-	//	*(char *)(tmp + 16) = j;  //
-	//	tmp = tmp + 20;
-	//}
+	
+	//前22*2：按顺序保存每个通道的count值
+	for (int i = 0; i < ADC_CHANNEL_COUNT; ++i)
+	{
+		*(short*)temp = count;
+		temp += 2;
+	}
 
+	int tmpShift{ 0 };
+	for (int i = 0; i < count; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			// 码盘值
+			tmpShift = channelMap[j * 3] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)(fileData_ + 12);
 
-	delete []data_ADC;
+			tmpShift = channelMap[j * 3 + 1] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)(fileData_ + 12);
+
+			tmpShift = channelMap[j * 3 + 2] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)(fileData_ + 12);
+
+			// 3个通道的电压值
+			tmpShift = count + channelMap[j * 3] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)fileData_;
+
+			tmpShift = count + channelMap[j * 3 + 1] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)(fileData_ + 4);
+
+			tmpShift = count + channelMap[j * 3 + 2] * count * 2 + i;
+			*(short*)(temp + tmpShift * 2) = *(short*)(fileData_ + 8);
+
+			fileData_ += 20;
+			ASSERT(fileData_ <= endPtr);
+		}
+	}
+	ASSERT(fileData_ <= endPtr);
+	CFile dataflie;
+	if (!dataflie.Open(L"C:\\Users\\ranji\\Desktop\\adcData.dat", CFile::modeCreate | CFile::modeWrite | CFile::typeBinary))
+	{
+		return;
+	}
+	dataflie.Write(adcData, 44 + 2 * 2 * count * 22);
+	dataflie.Close();
+
+	// 完成解析
+	delete[] fileData;
+	
 }

@@ -49,7 +49,7 @@ private:
 	upgradeLength length_;
 	DataLevel datalevel;
 	CString fileName;
-	char* data_ADC;
+	char* adcData;
 	ADCChannel  adcChannels_[ADC_CHANNEL_COUNT];
 private:
 	bool SendCommand(int id);
